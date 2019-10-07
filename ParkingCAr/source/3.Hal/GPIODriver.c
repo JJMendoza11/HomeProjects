@@ -51,7 +51,7 @@ void GPIO_vfnDriverInit (void){
 void GPIO_vfnDriverInptsInit(uint8 *PinVal,uint8 SizeOfList){
 	while(SizeOfList!=0){
 		PORTE->PCR[*PinVal]=ActGPIO_PullDown;
-		DbncrInit(*PinVal);
+		Dbncr_vfnInit(*PinVal);
 		PinVal++;
 		SizeOfList--;
 	}

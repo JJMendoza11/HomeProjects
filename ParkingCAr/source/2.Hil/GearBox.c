@@ -12,518 +12,157 @@
 #include "PWMDriver.h"
 
 extern uint16 u8Seg;
-uint8 u8IOReg=0;
 uint8 u8Speed=0;
-uint8 GearStatus=0;
-static uint16 a=0;
+uint8 a[6][3]={
+		{10,0,0},
+		{1,30,0},
+		{2,60,30},
+		{3,90,60},
+		{4,120,90},
+		{11,50,0}
+};
 
-void Gear_vfnGear(void){
-	switch (GearStatus){
-	case 0:
-		if(Dbncr(enBrake)){
-			if(Dbncr(enClutch)){
-				if(Dbncr(enGearUp)){
-					u8IOReg=16;
-					GearStatus=1;
-				}else if(Dbncr(enGearDwn)){
-					u8IOReg=11<<4;
-					GearStatus=11;
-					Timer_vfn4DsplyVal(u8IOReg>>4);
+void Gear_vfnParkGear(void);
+void Gear_vfnGearDrive(void);
+void Gear_vfnBrake(void);
+void Gear_vfnFastBreak(void);
+
+tstGearInfo astGearsData[enTotalGears];
+static tenGearConf u8Index=enParkGear;
+static uint8 u8Delay=0;
+
+void Gear_InitSt(void){
+	for (uint8 i=0;i<6;i++){
+		for(uint8 j=0;j<3;j++){
+			if(j==0){
+				astGearsData[i].u8GearName=a[i][j];
+			}else if(j==1){
+				astGearsData[i].u8MaxVal=a[i][j];
+			}else{
+				astGearsData[i].u8MinVal=a[i][j];
+			}
+		}
+	}
+}
+
+void Gear_vfnParkGear(void){
+	Timer_vfn4DsplyVal(astGearsData[u8Index].u8GearName);
+	if(Dbncr_u8fnCheckStableState(enBrake)){
+		if(Dbncr_u8fnCheckStableState(enClutch)){
+			Dbncr_vfnDbncr(enGearUp);
+			if(Dbncr_u8fnRisingEdge(enGearUp)){
+				u8Index=enFirstGear;
+				vfnDriveState();
+			}else{
+				Dbncr_vfnDbncr(enGearDwn);
+				if(Dbncr_u8fnRisingEdge(enGearDwn)){
+					u8Index=enReverseGear;
+					vfnReverseState();
 				}
 			}
 		}
-		break;
-	case 1:
-		if((Dbncr(enClutch))&&(u8IOReg&(1<<4))){
-			Timer_vfn4DsplyVal(u8IOReg>>4);
-			if(Dbncr(enAcc)){
-				u8IOReg|=(1<<2);
-				GearStatus=2;
-			}
-		}
-		break;
-	case 2:
-		if(!Dbncr(enClutch)){
-			vfnTMR();
-			u8Speed++;
-			GearStatus=3;
-			vfnDriveState();
-		}
-		break;
-	case 3:
-		if(Dbncr(enAcc)){
-			u8IOReg|=AccFlag;
-		}else{
-			u8IOReg&=~AccFlag;
-		}
-		if(u8Seg==160){
-			a=0;
-			if(Dbncr(enAcc)){
-				if(u8Speed<30){
+	}
+}
+
+void Gear_vfnGearDrive(void){
+	u8Delay++;
+	if(Dbncr_u8fnCheckStableState(enAcc)){
+				if((u8Speed<astGearsData[u8Index].u8MaxVal)&&(u8Speed>=astGearsData[u8Index].u8MinVal-10)){
 					vfnTMR();
 					u8Speed++;
 				}else{
-					if(u8Speed){
-						vfnTMRLess();
-						u8Speed--;
-					}
-				}
-			}else{
-				if(Dbncr(enBrake)){
-					GearStatus=10;
-				}else if (Dbncr(enClutch)){
-					GearStatus=4;
-				}else{
-					if(u8Speed<30){
-						vfnTMRLess();
-						u8Speed--;
-						if((u8Speed%30==0)){
-							u8IOReg-=16;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-							GearStatus=0;
-						}
-						if(!u8Speed){
-							GearStatus=0;
-							u8IOReg=10<<4;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-					}else{
-						if(u8Speed){
-							vfnTMRLess();
-							u8Speed--;
-						}
-					}
-				}
-			}
-			PWM_Acc_or_Dec(u8Speed);
-		}
-		if(u8Speed>30){
-			vfnTMRLess();
-			u8Speed--;
-		}
-		break;
-	case 4:
-		if(Dbncr(enClutch)){
-			if(Dbncr(enGearUp)){
-				u8IOReg+=16;
-				GearStatus=5;
-				Timer_vfn4DsplyVal(u8IOReg>>4);
-			}else{
-				if((u8Speed)&&(u8Seg==160)){
-					vfnTMRLess();
-					u8Speed--;
-				}
-			}
-		}else{
-			GearStatus=3;
-		}
-		PWM_Acc_or_Dec(u8Speed);
-		break;
-	case 5:
-		if(u8Seg==160){
-			if(!Dbncr(enClutch)){
-				if(Dbncr(enAcc)){
-					if(u8Speed<60){
-						vfnTMR();
-						u8Speed++;
-					}else{
-						if(u8Speed){
-							vfnTMRLess();
-							u8Speed--;
-						}
-					}
-				}else{
-					if(Dbncr(enBrake)){
-						GearStatus=10;
-					}else if (Dbncr(enClutch)){
-						//GearStatus=6;
-					}else{
-						if(u8Speed<60){
-							vfnTMRLess();
-							u8Speed--;
-							if((u8Speed%30==0)){
-								u8IOReg-=16;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-								GearStatus=10;
-							}
-							if(!u8Speed){
-								GearStatus=0;
-								u8IOReg=0;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-							}
-						}else{
-							if(u8Speed){
-								vfnTMRLess();
-								u8Speed--;
-							}
-						}
-					}
-				}
-			}else{
-				if(u8Speed>45){
-					GearStatus=6;
-				}else{
-					if(u8Speed){
-						vfnTMRLess();
-						u8Speed--;
-						if((u8Speed%30==0)){
-							u8IOReg-=16;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-							GearStatus=10;
-						}
-						if(!u8Speed){
-							GearStatus=0;
-							u8IOReg=0;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-					}
-				}
-			}
-			PWM_Acc_or_Dec(u8Speed);
-		}
-		if(u8Speed>60){
-			vfnTMRLess();
-			u8Speed--;
-		}
-		break;
-	case 6:
-		if(Dbncr(enClutch)){
-			if(Dbncr(enGearUp)){
-				u8IOReg+=16;
-				GearStatus=7;
-				Timer_vfn4DsplyVal(u8IOReg>>4);
-			}else{
-				if(Dbncr(enGearDwn)){
-					u8IOReg-=16;
-					GearStatus=3;
-					Timer_vfn4DsplyVal(u8IOReg>>4);
-				}else{
-					if((u8Speed)&&(u8Seg==160)){
-						vfnTMRLess();
-						u8Speed--;
-						if((u8Speed%30==0)){
-							u8IOReg-=16;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-						if(!u8Speed){
-							GearStatus=0;
-							u8IOReg=0;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-					}
-				}
-			}
-		}else{
-			GearStatus=5;
-		}
-		PWM_Acc_or_Dec(u8Speed);
-		break;
-	case 7:
-		if(u8Seg==160){
-			if(!Dbncr(enClutch)){
-				if(Dbncr(enAcc)){
-					if(u8Speed<90){
-						vfnTMR();
-						u8Speed++;
-					}else{
-						if(u8Speed){
-							vfnTMRLess();
-							u8Speed--;
-						}
-					}
-				}else{
-					if(Dbncr(enBrake)){
-						GearStatus=10;
-					}else if (Dbncr(enClutch)){
-						//GearStatus=6;
-					}else{
-						if(u8Speed<90){
-							vfnTMRLess();
-							u8Speed--;
-							if((u8Speed%30==0)){
-								u8IOReg-=16;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-								GearStatus=10;
-							}
-							if(!u8Speed){
-								GearStatus=0;
-								u8IOReg=0;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-							}
-						}else{
-							if(u8Speed){
-								vfnTMRLess();
-								u8Speed--;
-							}
-						}
-					}
-				}
-			}else{
-				if(u8Speed>75){
-					GearStatus=8;
-				}else{
-					if(u8Speed){
-						vfnTMRLess();
-						u8Speed--;
-						if((u8Speed%30==0)){
-							u8IOReg-=16;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-							GearStatus=10;
-						}
-						if(!u8Speed){
-							GearStatus=0;
-							u8IOReg=0;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-					}
-				}
-			}
-			PWM_Acc_or_Dec(u8Speed);
-		}
-		if(u8Speed>90){
-			vfnTMRLess();
-			u8Speed--;
-		}
-		break;
-	case 8:
-		if(Dbncr(enClutch)){
-			if(Dbncr(enGearUp)){
-				u8IOReg+=16;
-				GearStatus=9;
-				Timer_vfn4DsplyVal(u8IOReg>>4);
-			}
-			else{
-				if(Dbncr(enGearDwn)){
-					u8IOReg-=16;
-					GearStatus=5;
-					Timer_vfn4DsplyVal(u8IOReg>>4);
-				}
-				if((u8Speed)&&(u8Seg==160)){
-					vfnTMRLess();
-					u8Speed--;
-					if((u8Speed%30==0)){
-						u8IOReg-=16;
-						Timer_vfn4DsplyVal(u8IOReg>>4);
-					}
-					if(!u8Speed){
-						GearStatus=0;
-						u8IOReg=0;
-						Timer_vfn4DsplyVal(u8IOReg>>4);
-					}
-				}
-			}
-		}else{
-			GearStatus=3;
-		}
-		PWM_Acc_or_Dec(u8Speed);
-		break;
-	case 9:
-		if(u8Seg==160){
-			if(!Dbncr(enClutch)){
-				if(Dbncr(enAcc)){
-					if(u8Speed<120){
-						vfnTMR();
-						u8Speed++;
-					}
-				}else{
-					if(Dbncr(enBrake)){
-						GearStatus=10;
-					}else if (Dbncr(enClutch)){
-						//GearStatus=6;
-					}else{
-						if(u8Speed){
-							vfnTMRLess();
-							u8Speed--;
-							if((u8Speed%30==0)){
-								u8IOReg-=16;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-								GearStatus=10;
-							}
-							if(!u8Speed){
-								GearStatus=0;
-								u8IOReg=0;
-								Timer_vfn4DsplyVal(u8IOReg>>4);
-							}
-						}
-					}
-				}
-				PWM_Acc_or_Dec(u8Speed);
-			}else{
-				GearStatus=12;
-			}
-		}
-		if(u8Speed>120){
-			vfnTMRLess();
-			u8Speed--;
-		}
-		break;
-	case 10:
-			if(Dbncr(enBrake)){
-				if(u8Speed){
-					u8Speed--;
-					vfnTMRLess();
-				}else{
-					GearStatus=0;
-					u8IOReg=10<<4;
-					Timer_vfn4DsplyVal(u8IOReg>>4);
-					break;
-				}
-				if((u8Speed%30==0)){
-					u8IOReg-=16;
-					Timer_vfn4DsplyVal(u8IOReg>>4);
-				}
-			}else if(Dbncr(enAcc)){
-				if(u8Speed>90){
-					GearStatus=9;
-					u8IOReg=(4<<4);
-				}else if((u8Speed<90)&&(u8Speed>60)){
-					GearStatus=7;
-					u8IOReg=(3<<4);
-				}else if((u8Speed<60)&&(u8Speed>30)){
-					GearStatus=5;
-					u8IOReg=(2<<4);
-				}else if((u8Speed<30)&&(u8Speed>0)){
-					GearStatus=3;
-					u8IOReg=(1<<4);
-				}
-				Timer_vfn4DsplyVal(u8IOReg>>4);
-			}else{
-				if((u8Speed)&&(u8Seg==160)){
-					vfnTMRLess();
-					u8Speed--;
-					if((u8Speed%30==0)&&(u8Seg==160)){
-						u8IOReg-=16;
-						Timer_vfn4DsplyVal(u8IOReg>>4);
-					}
-					if(!u8Speed){
-						GearStatus=0;
-						u8IOReg=10<<4;
-						Timer_vfn4DsplyVal(u8IOReg>>4);
-					}
-				}
-			}
-
-			PWM_Acc_or_Dec(u8Speed);
-			break;
-	case 11:
-		if(u8Seg==160){
-				if(!Dbncr(enClutch)){
-					if(Dbncr(enAcc)){
-						if(u8Speed<50){
+					if(u8Speed<astGearsData[u8Index].u8MinVal-10){
+						if(u8Delay==3){
 							vfnTMR();
 							u8Speed++;
 						}
-					}else{
-						if(Dbncr(enBrake)){
-							GearStatus=10;
-						}else if (Dbncr(enClutch)){
-							//GearStatus=6;
-						}else{
-							if(u8Speed){
-								vfnTMRLess();
-								u8Speed--;
-								if(!u8Speed){
-									GearStatus=0;
-									u8IOReg=10<<4;
-									Timer_vfn4DsplyVal(u8IOReg>>4);
-								}
-							}
-						}
 					}
-					PWM_Acc_or_Dec(u8Speed);
 				}
+		}else if(u8Speed){
+			if(u8Speed>astGearsData[u8Index].u8MaxVal){
+				Gear_vfnFastBreak();
+			}else{
+				vfnTMRLess();
+				u8Speed--;
 			}
-			break;
-		break;
-	case 12:
-		if(Dbncr(enClutch)){
-					if(Dbncr(enGearDwn)){
-						u8IOReg-=16;
-						GearStatus=7;
-						Timer_vfn4DsplyVal(u8IOReg>>4);
-					}
-					if((u8Speed)&&(u8Seg==160)){
-						vfnTMRLess();
-						u8Speed--;
-						if((u8Speed%30==0)){
-							u8IOReg-=16;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-						if(!u8Speed){
-							GearStatus=0;
-							u8IOReg=0;
-							Timer_vfn4DsplyVal(u8IOReg>>4);
-						}
-					}
+		}
+		if((u8Index>4)&&(u8Speed>50)){
+			u8Index=enFourthGear;
+		}
+		PWM_Acc_or_Dec(u8Speed);
+		if(u8Delay==3){
+			u8Delay=0;
+		}
+}
+
+void Gear_vfnBrake(void){
+	Timer_vfn4DsplyVal(astGearsData[u8Index].u8GearName);
+	if(u8Speed){
+		Gear_vfnFastBreak();
+		if((u8Speed<astGearsData[u8Index].u8MinVal)&&(!Dbncr_u8fnCheckStableState(enClutch))){
+			u8Index--;
+		}
+	}else{
+		if(!Dbncr_u8fnCheckStableState(enClutch)){
+			vfnParkState();
+			u8Index=enParkGear;
+		}
+	}
+	PWM_Acc_or_Dec(u8Speed);
+}
+
+void Gear_vfnFastBreak(void){
+	vfnTMRLess();
+	u8Speed--;
+}
+
+
+void Gear_vfCheckBttns4Parking(void){
+	Timer_vfn4DsplyVal(astGearsData[u8Index].u8GearName);
+	if(Dbncr_u8fnCheckStableState(enBrake)){
+		Dbncr_vfnDbncr(enClutch);
+		Dbncr_vfnDbncr(enAcc);
+		Gear_vfnParkGear();
+	}else{
+		Dbncr_vfnDbncr(enBrake);
+	}
+}
+
+void Gear_vfCheckBttns4Drive(void){
+	Timer_vfn4DsplyVal(astGearsData[u8Index].u8GearName);
+	Dbncr_vfnDbncr(enBrake);
+	Dbncr_vfnDbncr(enClutch);
+	if(Dbncr_u8fnCheckStableState(enBrake)){
+		Gear_vfnBrake();
+	}else{
+		Dbncr_vfnDbncr(enGearUp);
+		Dbncr_vfnDbncr(enGearDwn);
+		if (Dbncr_u8fnCheckStableState(enClutch)){
+			if(u8Index!=enReverseGear){
+				if(Dbncr_u8fnRisingEdge(enGearUp)){
+					u8Index++;
 				}else{
-					GearStatus=9;
+					if(Dbncr_u8fnRisingEdge(enGearDwn)){
+						if(u8Index>1){
+							u8Index--;
+
+						}
+					}
 				}
-				PWM_Acc_or_Dec(u8Speed);
-				break;
-	}
-}
-
-/*---------------------------------------------------------------------------------------------------------*/
-/*----------------------------------Posiblemente esto sea basura-------------------------------------------*/
-/*---------------------------------------------------------------------------------------------------------*/
-void Gear_vfnStartModule(void){
-	if(Dbncr(enClutch)){
-		u8IOReg|=ClutchFlag;
-		if(Check_GearUP_Bttn()){
-			u8IOReg+=16;
-		}else{
-			/*No Used*/
-		}
-	}else{
-		u8IOReg&=~ClutchFlag;
-	}
-}
-
-void Check_Brake_Bttn(void){
-	if(u8IOReg<3){
-		if(Dbncr(enBrake)){
-			Gear_vfnStartModule();
-		}else{
-			/*No Used*/
-		}
-	}else{
-		if(u8IOReg>=18){
-			Gear_u8AccModule();
-		}
-	}
-}
-
-uint8 Check_GearUP_Bttn(void){
-	if(Dbncr(enGearUp)){
-		return 1;
-	}else{
-		return 0;
-	}
-}
-
-uint8 Gear_u8AccModule(void){
-	if(!u8Speed){
-		if((Dbncr(enClutch))&&(u8IOReg&(1<<4))){
-			Timer_vfn4DsplyVal(u8IOReg>>4);
-			if(Dbncr(enAcc)){
-				u8IOReg|=(1<<2);
 			}
-			return 1;
-		}else{
-			return 0;
+			if(u8Speed&&(u8Seg==160)){
+				vfnTMRLess();
+				u8Speed--;
+			}
 		}
-	}else{
-		return 0;
+		if(u8Speed>=astGearsData[u8Index].u8MaxVal){
+			vfnTMRLess();
+			u8Speed--;
+		}else{
+			Dbncr_vfnDbncr(enAcc);
+			if(u8Seg==160){
+			Gear_vfnGearDrive();
+			}
+		}
 	}
 }
-
-void Check_Acc_Bttn(void){
-	if(Dbncr(enAcc)){
-		u8IOReg|=ClutchFlag;
-		u8IOReg|=(Check_GearUP_Bttn()<<4);
-	}else{
-		u8IOReg&=~ClutchFlag;
-	}
-}
-
-

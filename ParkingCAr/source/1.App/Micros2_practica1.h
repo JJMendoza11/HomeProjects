@@ -23,14 +23,16 @@ typedef unsigned short uint16;
 #define ClutchFlag		(1<<1)
 
 typedef enum{
-	Clutch=20,
-	Brake,
-	Acc,
-	Gear_Up,
-	Gear_Dwn=29,
-}enPinConf;
+	enPin0=20,
+	enPin1,
+	enPin2,
+	enPin3,
+	enPin4=29,
+}enPinsNum;
 
+void vfnParkState(void);
 void vfnDriveState(void);
+void vfnReverseState(void);
 void vfnWhile(void);
 
 #endif /* 1_APP_MICROS2_PRACTICA1_H_ */

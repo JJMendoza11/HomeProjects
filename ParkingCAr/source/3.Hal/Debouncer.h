@@ -14,13 +14,13 @@ typedef unsigned long uint_32;
 #define ShootCapture 3
 
 typedef enum{
-	enPin1=0,
-	enPin2,
-	enPin3,
-	enPin4,
-	enPin5,
+	enClutch=0,
+	enBrake,
+	enAcc,
+	enGearUp,
+	enGearDwn,
 	enTotalPins
-}tenPinConf;
+}tenPinInputs;
 
 typedef struct{
 	uint_8 Pin;
@@ -31,8 +31,11 @@ typedef struct{
 }tstDbncrInfo;
 
 
-void DbncrInit(uint_8 PinVal);
-uint_8 Dbncr(uint_8 u8Pin2Check);
+void Dbncr_vfnInit(uint_8 PinVal);
+void Dbncr_vfnDbncr(uint_8 u8Pin2Check);
+uint_8 Dbncr_u8fnRisingEdge(uint_8 u8Pin2Check);
+uint_8 Dbncr_u8fnCheckStableState(uint_8 u8Pin2Check);
+void Dbncr_vfCheckBttns4Parking(void);
 
 
 
