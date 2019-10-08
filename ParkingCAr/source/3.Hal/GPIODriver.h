@@ -45,6 +45,8 @@ void GPIO_vfnSetVal(uint8 *u8DispVal);
 void GPIO_vfnSetDisplay(uint8 *u8DispFlag);
 void GPIO_vfnLEDriverInit(void);
 void GPIO_vfnToggleLEd(void);
+void GPIO_vfnDrive(void);
+void GPIO_vfnReverse(void);
 
 
 #endif /* GPIODRIVER_H_ */

@@ -99,5 +99,20 @@ void GPIO_vfnToggleLEd(void){
 	GPIOD->PTOR=Blue;
 }
 
+void GPIO_vfnDrive(void){
+	PORTB->PCR[0]|=ActGPIO;
+	PORTB->PCR[1]&=~ActGPIO;
+	GPIOB->PCOR=2;
+	GPIOB->PDDR=1;
+	GPIOB->PSOR=1;
+}
+
+void GPIO_vfnReverse(void){
+	PORTB->PCR[1]|=ActGPIO;
+	PORTB->PCR[0]&=~ActGPIO;
+	GPIOB->PCOR=1;
+	GPIOB->PDDR=2;
+	GPIOB->PSOR=2;
+}
 
 

@@ -70,6 +70,7 @@ void vfnWhile(void){
 }
 
 void vfnDriveState(void){
+	GPIO_vfnDrive();
 	StateMachineVal=Drive;
 }
 
@@ -78,6 +79,7 @@ void vfnParkState(void){
 }
 
 void vfnReverseState(void){
+	GPIO_vfnReverse();
 	StateMachineVal=Reverse;
 }
 
